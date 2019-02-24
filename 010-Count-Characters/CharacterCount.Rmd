@@ -1,0 +1,81 @@
+---
+title: "Physionet Challenge Count Characters"
+output:
+  html_document:
+    df_print: paged
+---
+
+Create frequency counts of all characters in files to check whether unusual or unexpected characters are in any of the Physionet Challenge files.
+
+efg | 2019-02-23
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()  
+```
+
+"Character Count" programs in this directory:
+
+* charcnt2.exe - command line program for Linux of Windows.  Ouput vector of 256 character counts, along with total, in single line.
+
+Note:  Source code for programs can be found on [GitHub](https://github.com/EarlGlynn/CharacterCount).
+
+```{r}
+library(readr)      # read_csv
+library(kableExtra) # kable_styling
+```
+
+## Make list of .csv data files
+
+```{r}
+dataDIR <- "../../data/training" 
+files <- list.files(dataDIR, full.names=TRUE)
+```
+
+## Get character counts for all files using charcnt2
+
+Append each row of results to countsFile
+
+```{r}
+countsFile <- "##SaveIt.txt"
+if (file.exists(countsFile)) file.remove(countsFile)
+
+for (i in 1:length(files))
+{
+  if (i %% 500 == 0) cat(i, files[i], "\n") 
+  shell(paste0(getwd(), "/charcnt2 ", files[i], " >> ", countsFile))
+}
+```
+
+## Cleanup results
+
+```{r}
+results <- readLines(countsFile)
+results <- substr(results, nchar(dataDIR)+2, nchar(results))
+results <- c(paste0("Decimal,", paste(0:255, collapse=","), ",Total"),
+             results)
+file.remove(countsFile)
+```
+
+## Save results
+
+```{r}
+filename <- "character-counts.csv" 
+writeLines(results, filename)
+```
+
+Use Excel to make the output more readable.
+
+Normally edit the .csv file above (saving as an .xlsx file) to clarify that "Decimal" is the row label and that filenames are in the first column.  Add a TOTAL row for column sums.
+
+Normally the Excel file is edited to show the first three rows as the Decimal, Hex and Character versions of the possible printable characters in a file.
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                      
