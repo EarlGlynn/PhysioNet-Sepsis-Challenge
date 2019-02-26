@@ -17,7 +17,7 @@ div#TOC li {
 }
 </style>
 
-efg | 2019-02-24
+efg | 2019-02-25
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -25,6 +25,11 @@ time.1 <- Sys.time()
 ```
 
 # Setup
+
+```{r}
+plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
+plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```
 
 ## Packages
 
@@ -52,9 +57,13 @@ Show <- function(data, caption="", bigMark="")
 ```{r, comment=NA}
 load(file = "../../data/PhysioNet-2019-Raw-Data.RData")
 dim(allData)
+```
 
-plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
-plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```{r}
+allData    %>%
+  head(50) %>%
+  Show()   %>%
+  scroll_box(width = "800px", height = "500px")
 ```
 
 ## Create Patient Summary
@@ -82,7 +91,8 @@ patientSummary <-
   allData                               %>%
   
   group_by(patient)                     %>%
-  summarize(Age         = Age[1],
+  summarize(nRecord     = n(),
+            Age         = Age[1],
             Gender      = Gender[1],
             Unit1       = Unit1[1],
             Unit2       = Unit2[1],
@@ -111,9 +121,82 @@ patientSummary %>%
 
 # Sepsis Label
 
+## By Raw Data Record
+
+```{r, comment=NA}
+table(allData$SepsisLabel, useNA = "ifany")
+```
+
+## By Patient
+
 ```{r, comment=NA}
 table(patientSummary$Sepsis, useNA = "ifany")
 ```
+
+# Records Per Patient
+
+There is one record per hour, but the first patient record is sometimes not hour 1.
+
+## All Patients
+
+The median number of records per patient is `r median(patientSummary$nRecord)`.
+
+```{r, comment=NA}
+quantile(patientSummary$nRecord,
+         c(0.0, 0.01, 0.10, 0.25, 0.50, 0.75, 0.90, 0.99, 1.00))
+```
+
+```{r}
+recordsPerPatient <-
+  patientSummary       %>%
+  group_by(nRecord)    %>%
+  count()              %>%
+  ungroup()
+```
+
+```{r}
+LOSbreaks <- c(1, 8, 12, 18, 24, 30, 36, 48, 
+                             60, 72, 96, 192, 336)
+```
+
+
+```{r}
+recordsPerPatient                                               %>%
+  ggplot(aes(x = nRecord, y = n))                                +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title = "Records Per Patient",
+         subtitle = paste(sum(recordsPerPatient$n), "patients"), 
+         x = "Records Per Patient", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+## Sepsis Patients
+
+```{r}
+recordsPerSepsisPatient <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(nRecord)           %>%
+  count()                     %>%
+  ungroup()
+```
+
+```{r}
+recordsPerSepsisPatient                                         %>%
+  ggplot(aes(x = nRecord, y = n))                                +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title = "Records Per Patient",
+         subtitle = paste(sum(recordsPerSepsisPatient$n), "patients"), 
+         x = "Records Per Patient", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
 
 # Age
 
@@ -293,8 +376,7 @@ patientSummary                                                  %>%
   ggplot(aes(x = maxICULOS, y = ..density..))                    +
     geom_histogram(fill="cornsilk", color="grey80", bins=30)     +
     geom_density()                                               +
-    scale_x_log10(breaks = c(1, 8, 12, 18, 24, 30, 36, 48, 
-                             60, 72, 96, 192))                   +
+    scale_x_log10(breaks = LOSbreaks)                            +
     labs(title    = "ICU Length-of-Stay",
          subtitle = paste(nrow(patientSummary), "patients"),
          x = "LOS [Hours]",                        
@@ -311,8 +393,7 @@ patientSummary                                                  %>%
   ggplot(aes(x = maxICULOS, y = ..density..))                    +
     geom_histogram(fill="cornsilk", color="grey80", bins=30)     +
     geom_density()                                               +
-    scale_x_log10(breaks = c(1, 8, 12, 18, 24, 30, 36, 48, 
-                             60, 72, 96, 192))                   +
+    scale_x_log10(breaks = LOSbreaks)                            +
     labs(title    = "ICU Length-of-Stay",
          subtitle = paste(nrow(patientSummary), "patients"),
          x = "LOS [Hours]",                        
@@ -322,6 +403,93 @@ patientSummary                                                  %>%
 ```
 
 Two modes not seen in sepsis patients.
+
+# ICU Hours Recorded
+
+Nearly the same as number of records per patient.
+
+## All Patients, All Hours
+
+```{r}
+byHour <- 
+  allData                  %>%
+  filter(SepsisLabel == 1) %>%
+  group_by(ICULOS)         %>%
+  count()                  %>%
+  ungroup()
+```
+
+```{r}
+byHour                                                          %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+    #geom_density()                                              +
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (All Patients, All Hours)",
+         subtitle = paste(nrow(allData), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+
+## Sepsis Patients, All Hours
+
+```{r, comment=NA}
+byHourSepsisPatient <- 
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  select(patient)             %>%
+  inner_join(allData, by = "patient")  %>%
+  group_by(ICULOS)            %>%
+  count()                     %>%
+  ungroup()
+
+nrow(byHourSepsisPatient)
+```
+
+```{r}
+byHourSepsisPatient                                             %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+    #geom_density()                                              +
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (Sepsis Patients, All Hours)",
+         subtitle = paste(sum(byHourSepsisPatient$n), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+
+## Sepsis Patients, Sepsis Hours
+
+```{r, comment=NA}
+byHourSepsisPatient <- 
+  allData                     %>%
+  filter(SepsisLabel == 1)    %>%
+  group_by(ICULOS)            %>%
+  count()                     %>%
+  ungroup()
+
+nrow(byHourSepsisPatient)
+```
+
+```{r}
+byHourSepsisPatient                                             %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+    #geom_density()                                              +
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (Sepsis Patients, Sepsis Hours)",
+         subtitle = paste(sum(byHourSepsisPatient$n), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
 
 ```{r, echo=FALSE}
 time.2 <- Sys.time()
