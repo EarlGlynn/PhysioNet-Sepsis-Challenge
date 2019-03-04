@@ -1,0 +1,151 @@
+---
+title: "Vital Signs Stats - PhysioNet Sepsis Challenge"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style>
+
+efg | 2019-03-03
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()
+```
+
+# Purpose
+
+The purpose of this notebook is to take a preliminary look at the raw data from 5000 patients in the PhysioNet 2019 challenge, where some had sepsis and some did not.  
+
+The focus of this notebook is on the Vital Signs data (columns 1 - 8) and the outcome (column 41)
+
+* `SepsisLabel`.  For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+
+# Background
+
+The data being analyzed is from the [Early Prediction of Sepsis from Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019](https://physionet.org/challenge/2019/).
+
+# Exploration
+
+## Setup
+
+```{r}
+plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
+plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```
+
+### Packages
+
+```{r, comment=NA}
+library(tidyverse)
+library(kableExtra) # kable_styling
+library(readxl)
+```
+
+### Helper function
+
+```{r}
+Show <- function(data, caption="", bigMark="")
+{
+  data                                          %>%
+  kable("html",
+        caption=caption,
+        format.args = list(big.mark=bigMark))   %>%
+  kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
+                position = "left", full_width = FALSE)
+}
+```
+            
+### Vital Signs List and Units
+           
+```{r, echo=FALSE}
+vitalSigns <- 
+  read_xlsx("Vital-Signs.xlsx") 
+
+vitalSigns %>%
+  Show()
+```
+
+### Load PhysioNet 2019 Challenge Combined Data
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data.RData")
+dim(allData)
+```
+
+Verify vital signs match
+
+```{r, comment=NA}
+all(vitalSigns$Quantity %in% names(allData))
+```
+
+Sample Vital Signs
+
+```{r}
+allData                                           %>%
+  select( patient, ICULOS, 
+          vitalSigns$Quantity,
+          SepsisLabel)                            %>%
+  head()                                          %>%
+  Show()  
+```
+
+## Sepsis Label
+
+```{r, comment=NA}
+table(allData$SepsisLabel, useNA = "ifany")
+```
+
+## Boxplots of Vital Signs
+
+```{r, results="asis"}
+for (i in 1:nrow(vitalSigns))
+{
+  rawData <- 
+    allData                                      %>%
+    select(vitalSigns$Quantity[i], SepsisLabel)  %>%
+    na.omit()
+  
+  quantity <- rawData %>% select(vitalSigns$Quantity[i]) %>% pull()
+  sepsis   <- rawData %>% select(SepsisLabel) %>% pull()
+  
+  boxplot(quantity ~ sepsis,
+          main = vitalSigns$Description[i],
+          col  = "skyblue",
+          ylab = paste0(vitalSigns$Description[i], 
+                        "[", vitalSigns$Units[i], "]"),
+          names = paste(c("Not Sepsis", "Sepsis"),
+                        table(sepsis), sep = "\n"))
+  grid()
+}
+
+```
+
+# Discussion
+
+[work in progress]
+
+# Conclusions
+
+[work in progress]
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                                     

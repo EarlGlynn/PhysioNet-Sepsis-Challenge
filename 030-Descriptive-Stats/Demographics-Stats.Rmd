@@ -17,28 +17,55 @@ div#TOC li {
 }
 </style>
 
-efg | 2019-02-25
+efg | 2019-03-03
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 time.1 <- Sys.time()
 ```
 
-# Setup
+# Purpose
+
+The purpose of this notebook is to take a preliminary look at the raw data from 5000 patients in the PhysioNet 2019 challenge, where some had sepsis and some did not.  
+
+The focus of this notebook is on the Demographics data (columns 35-40 in the raw files):
+
+
+| Quantity       | Units |               Description                         |
+|----------------|:-----:|---------------------------------------------------|
+| `Age`          | Years |                                                   |
+|`Gender`        |       | Female (0) or Male (1)                            |
+| `Unit1`        |       | Administrative identifier for ICU unit (MICU)     |
+| `Unit2`        |       | Administrative identifier for ICU unit (SICU)     |
+| `HospAdmTime`  | Hours | Time between hospital admit and ICU admit         |
+| `ICULOS`       | Hours | ICU length-of-stay (hours since ICU admit)        |      
+
+
+and the outcome (column 41)
+
+* `SepsisLabel`.  For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+
+# Background
+
+The data being analyzed is from the [Early Prediction of Sepsis from Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019](https://physionet.org/challenge/2019/).
+
+# Exploration
+
+## Setup
 
 ```{r}
 plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
 plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
 ```
 
-## Packages
+### Packages
 
 ```{r, comment=NA}
 library(tidyverse)
 library(kableExtra) # kable_styling
 ```
 
-## Helper function
+### Helper function
 
 ```{r}
 Show <- function(data, caption="", bigMark="")
@@ -52,12 +79,14 @@ Show <- function(data, caption="", bigMark="")
 }
 ```
                                                           
-## Load PhysioNet 2019 Challenge Combined Data
+### Load PhysioNet 2019 Challenge Combined Data
 
 ```{r, comment=NA}
 load(file = "../../data/PhysioNet-2019-Raw-Data.RData")
 dim(allData)
 ```
+
+Sample records
 
 ```{r}
 allData    %>%
@@ -66,7 +95,7 @@ allData    %>%
   scroll_box(width = "800px", height = "500px")
 ```
 
-## Create Patient Summary
+### Create Patient Summary
 
 Verify certain values are constant for a patient 
 
@@ -119,25 +148,25 @@ patientSummary %>%
   Show()
 ```
 
-# Sepsis Label
+## Sepsis Label
 
-## By Raw Data Record
+### By Raw Data Record
 
 ```{r, comment=NA}
 table(allData$SepsisLabel, useNA = "ifany")
 ```
 
-## By Patient
+### By Patient
 
 ```{r, comment=NA}
 table(patientSummary$Sepsis, useNA = "ifany")
 ```
 
-# Records Per Patient
+## Records Per Patient
 
 There is one record per hour, but the first patient record is sometimes not hour 1.
 
-## All Patients
+### All Patients
 
 The median number of records per patient is `r median(patientSummary$nRecord)`.
 
@@ -173,7 +202,9 @@ recordsPerPatient                                               %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
-## Sepsis Patients
+What happened at age ~60?
+
+### Sepsis Patients
 
 ```{r}
 recordsPerSepsisPatient <-
@@ -197,10 +228,9 @@ recordsPerSepsisPatient                                         %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
+## Age
 
-# Age
-
-## All Patients
+### All Patients
 
 ```{r, fig.width=8, fig.height=6}
 patientSummary                                                 %>%
@@ -215,7 +245,7 @@ patientSummary                                                 %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
-## By Sepsis Status
+### By Sepsis Status
 
 ```{r}
 sepsisCounts   <- table(patientSummary$Sepsis, useNA="ifany")
@@ -241,7 +271,7 @@ patientSummary                                                 %>%
     facet_wrap(~Sepsis, nrow=2, labeller = as_labeller(sepsisLabeller))
 ```
 
-## By Gender
+### By Gender
 
 ```{r}
 genderCounts   <- table(patientSummary$Gender, useNA="ifany")
@@ -267,7 +297,7 @@ patientSummary                                                 %>%
     facet_wrap(~Gender, nrow=2, labeller = as_labeller(genderLabeller))
 ```
 
-# Gender
+## Gender
 
 ```{r, comment=NA}
 table(patientSummary$Gender, useNA = "ifany")
@@ -277,33 +307,33 @@ table(patientSummary$Gender, useNA = "ifany")
 table(patientSummary$Sepsis, patientSummary$Gender, useNA = "ifany")
 ```
 
-# Units
+## Units
 
 Not sure how to use this information
 
-## Unit 1
+### Unit 1
 
 ```{r, comment=NA}
 table(patientSummary$Unit1, useNA = "ifany")
 ```
 
-## Unit 2
+### Unit 2
 
 ```{r, comment=NA}
 table(patientSummary$Unit2, useNA = "ifany")
 ```
 
-## Unit 1 and 2 are mutually exclusive when known
+### Unit 1 and 2 are mutually exclusive when known
 
 ```{r, comment=NA}
 table(patientSummary$Unit1, patientSummary$Unit2, useNA = "ifany")
 ```
 
-# Hospital Admit Time 
+## Hospital Admit Time 
 
 Hours between hospital admit and ICU admit
 
-### All Patients
+#### All Patients
 
 Some large negative values
 
@@ -326,7 +356,7 @@ patientSummary                                                  %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
-### By Sepsis Status
+#### By Sepsis Status
 
 ```{r, fig.width=8, fig.height=6}
 patientSummary                                                  %>%
@@ -343,9 +373,9 @@ patientSummary                                                  %>%
     facet_wrap(~Sepsis, nrow=2, labeller = as_labeller(sepsisLabeller))
 ```
 
-# ICU length-of-stay
+## ICU length-of-stay
 
-## Always starts at hour 1?
+### Always starts at hour 1?
 
 ```{r, comment=NA}
 table(patientSummary$minICULOS, useNA = "ifany")
@@ -361,7 +391,7 @@ patientSummary %>%
 
 Verified p01195 started at hour 9 and continued through hour 51.
 
-## Hourly gap(s) after first reported hour?
+### Hourly gap(s) after first reported hour?
 
 ```{r, comment=NA}
 table(patientSummary$gapICULOS, useNA = "ifany")
@@ -369,7 +399,7 @@ table(patientSummary$gapICULOS, useNA = "ifany")
 
 No gaps!
 
-## ICULOS All Patients
+### ICULOS All Patients
 
 ```{r, fig.width=8, fig.height=6}
 patientSummary                                                  %>%
@@ -386,7 +416,7 @@ patientSummary                                                  %>%
 
 Bimodal peaks always beg for an interpretation!
 
-## ICULOS By Sepsis Status
+### ICULOS By Sepsis Status
 
 ```{r, fig.width=8, fig.height=6}
 patientSummary                                                  %>%
@@ -404,11 +434,11 @@ patientSummary                                                  %>%
 
 Two modes not seen in sepsis patients.
 
-# ICU Hours Recorded
+## ICU Hours Recorded
 
 Nearly the same as number of records per patient.
 
-## All Patients, All Hours
+### All Patients, All Hours
 
 ```{r}
 byHour <- 
@@ -433,8 +463,7 @@ byHour                                                          %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
-
-## Sepsis Patients, All Hours
+### Sepsis Patients, All Hours
 
 ```{r, comment=NA}
 byHourSepsisPatient <- 
@@ -463,8 +492,7 @@ byHourSepsisPatient                                             %>%
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
 
-
-## Sepsis Patients, Sepsis Hours
+### Sepsis Patients, Sepsis Hours
 
 ```{r, comment=NA}
 byHourSepsisPatient <- 
@@ -481,7 +509,6 @@ nrow(byHourSepsisPatient)
 byHourSepsisPatient                                             %>%
   ggplot(aes(x = ICULOS, y = n))                                 +
     geom_bar(stat = "identity", fill="blue")                     +
-    #geom_density()                                              +
     scale_x_log10(breaks = LOSbreaks)                            +
     labs(title    = "ICULOS Hours (Sepsis Patients, Sepsis Hours)",
          subtitle = paste(sum(byHourSepsisPatient$n), "records"),
@@ -490,6 +517,14 @@ byHourSepsisPatient                                             %>%
          caption = c(plotCaptionLeft, plotCaptionRight))         +
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
+
+# Discussion
+
+[work in progress]
+
+# Conclusions
+
+[work in progress]
 
 ```{r, echo=FALSE}
 time.2 <- Sys.time()
