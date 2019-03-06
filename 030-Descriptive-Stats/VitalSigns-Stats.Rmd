@@ -41,7 +41,7 @@ The data being analyzed is from the [Early Prediction of Sepsis from Clinical Da
 ## Setup
 
 ```{r}
-plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
+plotCaptionLeft  <- "Source:  PhysioNet 2019 Sepsis Project"
 plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
 ```
 
@@ -110,11 +110,13 @@ allData                                           %>%
 table(allData$SepsisLabel, useNA = "ifany")
 ```
 
-## Vital Signs:  Boxplots and Density plots
+## Vital Signs
 
 ```{r, results="asis", fig.width=8, fig.height=6}
 for (i in 1:nrow(vitalSigns))
 {
+  cat("\n###", vitalSigns$Description[i], "\n")
+  
   rawData <- 
     allData                                      %>%
     select(vitalSigns$Quantity[i], SepsisLabel)  %>%
@@ -124,38 +126,41 @@ for (i in 1:nrow(vitalSigns))
                            "1" = "Sepsis"))      %>%
     mutate(Sepsis = as.factor(Sepsis))
    
-    valueBoxplot <- 
-      ggplot(rawData, 
-             aes_string("Sepsis", 
-                        vitalSigns$Quantity[i], 
-                        fill = "Sepsis"))                    +
-      geom_boxplot(notch = TRUE)                             +
-      scale_x_discrete(labels = paste(c("Not Sepsis", "Sepsis"),
-                                      paste0("n = ", 
-                                             table(rawData$Sepsis)) , 
-                                      sep = "\n") ) +
-      labs(title = vitalSigns$Description[i],
-           x = "",
-           y = paste0(vitalSigns$Description[i], 
-                            "[", vitalSigns$Units[i], "]"))  +
-      scale_fill_brewer(palette = "Pastel1", direction = -1) +
-      theme(legend.position = "none",
-            plot.margin = unit(c(5, 5, 5, 12), "mm"))        +
-      coord_flip()
-    
-    valueDensity <- 
-      ggplot(rawData, aes_string(x = vitalSigns$Quantity[i]))  +
-      geom_density(aes_string(group = "Sepsis", fill = "Sepsis"), 
-                   alpha = 0.5)   +
-      labs(title = vitalSigns$Description[i],
-           x = paste0(vitalSigns$Description[i], 
-                            "[", vitalSigns$Units[i], "]"))    +
-      scale_fill_brewer(palette = "Pastel1", direction = -1)   +
-      theme(legend.position = "none",
-            plot.margin = unit(c(5, 5, 5, 20), "mm"))
-    
-    grid.arrange(valueBoxplot, valueDensity)
+  valueBoxplot <- 
+    ggplot(rawData, 
+           aes_string("Sepsis", 
+                      vitalSigns$Quantity[i], 
+                      fill = "Sepsis"))                      +
+    geom_boxplot(notch = TRUE)                               +
+    scale_x_discrete(labels = paste(c("Not Sepsis", "Sepsis"),
+                                    paste0("n = ", 
+                                           table(rawData$Sepsis)) , 
+                                    sep = "\n") ) +
+    labs(title = vitalSigns$Description[i],
+         x = "",
+         y = paste0(vitalSigns$Description[i], 
+                          "[", vitalSigns$Units[i], "]"))    +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)   +
+    theme(legend.position = "none",
+          plot.margin = unit(c(5, 5, 5, 12), "mm"))          +
+    coord_flip()
   
+  valueDensity <- 
+    ggplot(rawData, aes_string(x = vitalSigns$Quantity[i]))  +
+    geom_density(aes_string(group = "Sepsis", fill = "Sepsis"), 
+                 alpha = 0.5)   +
+    labs(title = vitalSigns$Description[i],
+         x = paste0(vitalSigns$Description[i], 
+                          "[", vitalSigns$Units[i], "]"),
+         caption = c(plotCaptionLeft, plotCaptionRight))     +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)   +
+    theme(plot.caption = element_text(hjust = c(0, 1)),
+          legend.position = "none",
+          plot.margin = unit(c(5, 5, 5, 20), "mm"))
+  
+  grid.arrange(valueBoxplot, valueDensity)
+  
+  cat("\n")
 }
 ```
 
