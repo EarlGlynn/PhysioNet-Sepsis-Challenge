@@ -17,7 +17,7 @@ div#TOC li {
 }
 </style> 
 
-efg | 2019-02-24
+efg | 2019-03-06
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -80,13 +80,17 @@ length(files)
 
 Add filename as first column.  Move ICULOS to second column.
 
+Convert NaNs to NAs while reading so tidyr fill function can be used more easily later.
+
 ```{r}
 readPSV <- function(filepath)
 {
   filename <- substr(basename(filepath), 1, nchar(basename(filepath))-4)
   d <-  
-    read_delim(filepath, "|", col_types = cols(.default = col_double()))  %>%
-    mutate(patient = filename)                                            %>%
+    read_delim(filepath, "|", 
+               col_types = cols(.default = col_double()),
+               na = "NaN")                                    %>%
+    mutate(patient = filename)                                %>%
     select(patient, ICULOS, everything())
   
   d
