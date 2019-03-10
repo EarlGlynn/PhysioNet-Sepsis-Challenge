@@ -58,24 +58,30 @@ plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
 plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
 ```
 
+```{r}
+LOSbreaks <- c(1, 8, 12, 18, 24, 30, 36, 48, 
+                             60, 72, 96, 192, 336)
+```
+
 ### Packages
 
 ```{r, comment=NA}
 library(tidyverse)
+library(writexl)
 library(kableExtra) # kable_styling
 ```
 
 ### Helper function
 
 ```{r}
-Show <- function(data, caption="", bigMark="")
+Show <- function(data, caption="", bigMark="", ...)
 {
   data                                          %>%
   kable("html",
         caption=caption,
         format.args = list(big.mark=bigMark))   %>%
   kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
-                position = "left", full_width = FALSE)
+                position = "left", full_width = FALSE, ...)
 }
 ```
                                                           
@@ -129,7 +135,10 @@ patientSummary <-
             minICULOS   = min(ICULOS),
             maxICULOS   = max(ICULOS),
             gapICULOS   = max(diff(ICULOS)),
-            Sepsis = max(SepsisLabel))  %>%
+            Sepsis      = max(SepsisLabel),
+            FirstSepsisHour = ICULOS[which(SepsisLabel == 1)][1],
+            LastSepsisHour  = ICULOS[rev( which(SepsisLabel == 1) )][1],
+            Duration        = LastSepsisHour - FirstSepsisHour + 1) %>%
   ungroup()                             %>%
   
   mutate(Gender = recode(Gender,
@@ -145,12 +154,20 @@ nrow(patientSummary)
 ```{r}
 patientSummary %>% 
   head()       %>%
-  Show()
+  Show(font_size = 9)
+```
+
+Save file for review in Excel
+
+```{r}
+write_xlsx(patientSummary, "Patient-Sepsis-Summary.xlsx")
 ```
 
 ## Sepsis Label
 
 ### By Raw Data Record
+
+Only about `r round(100*sum(allData$SepsisLabel == 1) / nrow(allData),1)`% of raw records indicate sepsis.
 
 ```{r, comment=NA}
 table(allData$SepsisLabel, useNA = "ifany")
@@ -158,11 +175,116 @@ table(allData$SepsisLabel, useNA = "ifany")
 
 ### By Patient
 
+Only about `r round(100*sum(patientSummary$Sepsis == "Sepsis") / nrow(patientSummary),1)`% of the patients have sepsis.    
+
 ```{r, comment=NA}
 table(patientSummary$Sepsis, useNA = "ifany")
 ```
 
-## Records Per Patient
+### First Hour Sepsis Indicated
+
+```{r, comment=NA}
+firstSepsisHourCounts <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(FirstSepsisHour)   %>%
+  count()                     %>%
+  ungroup()
+  
+nrow(firstSepsisHourCounts)
+```
+
+Sepsis reported in first hour for `r round(100 * firstSepsisHourCounts$n[1] / sum(firstSepsisHourCounts$n), 1)`% of sepsis patients.
+
+```{r}
+firstSepsisHourCounts     %>%
+  ggplot(aes(x = FirstSepsisHour, y = n))                        +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title = "First Hour Sepsis Indicated",
+         subtitle = paste(sum(firstSepsisHourCounts$n), "sepsis patients"), 
+         x = "First Hour", 
+         y = "Patient Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+
+
+```{r}
+firstSepsisHourCounts  %>%
+  head(10)             %>%
+  Show()
+```
+
+### Sepsis Time Span
+
+How many hours from first to last sepsis record for a sepsis patient?
+
+```{r, comment=NA}
+sepsisSpanHours <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(Duration)          %>%
+  count()                     %>%
+  ungroup()               
+  
+nrow(sepsisSpanHours)
+```
+
+```{r}
+Show(sepsisSpanHours)
+```
+
+### Sepsis Time Span for Patients with Sepsis Indicated First Hour
+
+```{r, comment=NA}
+patientSummary                  %>%
+  filter(Sepsis == "Sepsis", 
+         FirstSepsisHour == 1)  %>%
+  group_by(Duration)            %>%
+  count()                       %>%
+  ungroup()                     %>%
+  Show()
+```
+
+Does LastSepsisHour always match maxICULOS?
+
+```{r}
+patientSummary                         %>%
+  filter(Sepsis == "Sepsis", 
+         maxICULOS == LastSepsisHour)  %>%
+  count()                              %>%
+  Show()
+```
+
+Yes!
+
+### Example Sepsis patients with FirstSepsisHour = 1
+
+#### 67 year old female
+
+```{r, comment=NA}
+example1 <- 
+  allData                      %>%
+  filter(patient == "p00055") 
+nrow(example1)
+```
+
+```{r}
+example1 %>% Show()
+```
+
+#### 55 year old male
+
+```{r}
+allData                        %>%
+  filter(patient == "p01072")  %>%
+  Show()
+```
+
+
+## Raw Records Per Patient
 
 There is one record per hour, but the first patient record is sometimes not hour 1.
 
@@ -182,12 +304,6 @@ recordsPerPatient <-
   count()              %>%
   ungroup()
 ```
-
-```{r}
-LOSbreaks <- c(1, 8, 12, 18, 24, 30, 36, 48, 
-                             60, 72, 96, 192, 336)
-```
-
 
 ```{r}
 recordsPerPatient                                               %>%
@@ -520,7 +636,11 @@ byHourSepsisPatient                                             %>%
 
 # Discussion
 
-[work in progress]
+Only about 1.4% of raw records indicate sepsis.
+
+Only about 5.6% of the patients have sepsis.
+
+Sepsis reported in first hour for 20.1% of sepsis patients.
 
 # Conclusions
 
