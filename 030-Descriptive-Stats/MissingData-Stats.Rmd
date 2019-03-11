@@ -1,0 +1,260 @@
+---
+title: "Missing Data - PhysioNet Sepsis Challenge"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style>
+
+efg | 2019-03-03
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()
+```
+
+# Purpose
+
+The purpose of this notebook is to take a preliminary look at the raw data from 5000 patients in the PhysioNet 2019 challenge, where some had sepsis and some did not.  
+
+The focus of this notebook is to summarize missing data in 
+
+* Demographics data (columns 35-40 in the raw files)
+
+* Outcome variable, `SepsiLabel` (column 41)
+
+# Background
+
+The data being analyzed is from the [Early Prediction of Sepsis from Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019](https://physionet.org/challenge/2019/).
+
+# Exploration
+
+## Setup
+
+```{r}
+plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
+plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```
+
+### Packages
+
+```{r, comment=NA}
+library(tidyverse)
+library(writexl)
+library(kableExtra) # kable_styling
+```
+
+### Helper function
+
+```{r}
+Show <- function(data, caption="", bigMark="", ...)
+{
+  data                                          %>%
+  kable("html",
+        caption=caption,
+        format.args = list(big.mark=bigMark))   %>%
+  kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
+                position = "left", full_width = FALSE, ...)
+}
+```
+                                                          
+### Load PhysioNet 2019 Challenge Combined Data
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data.RData")
+dim(allData)
+```
+
+Sample records
+
+```{r}
+allData    %>%
+  head(5)  %>%
+  Show()  
+```
+
+# Global Missing Data Summary
+
+```{r}
+missingCount <- function(x)
+{
+  sum(is.na(x))  
+}
+```
+
+```{r}
+counts <-
+  allData %>%
+  summarize_if(is.numeric, missingCount)
+```
+
+```{r}
+counts %>%
+  Show(bigMark = ",")
+```
+
+Fields always present:  ICULOS, Age, Gender, HospAdmTime, SepsisLabel
+
+```{r}
+missingPercent <- function(x)
+{
+  round(100 * sum(is.na(x)) / length(x), 2)  
+}
+```
+
+```{r}
+percents <-
+  allData %>%
+  summarize_if(is.numeric, missingPercent)
+```
+
+```{r}
+percents %>%
+  Show()
+```
+
+```{r}
+percentMissingSummary <- 
+  tibble(Quantity = names(percents),
+         PercentMissingData = as.numeric(percents[1,]))
+```
+
+```{r}
+percentMissingSummary  %>%
+  Show()
+```
+
+# Missing Values % by SepsisLabel
+
+```{r}
+missingPercentBySepsis <-
+  allData  %>%
+  group_by(SepsisLabel)  %>%
+  summarize_if(is.numeric, missingPercent)  %>%
+  ungroup() 
+
+missingPercentBySepsis %>%
+  Show()
+```
+
+# Median Patient % Missing 
+
+```{r}
+missingPercentByPatient <-
+  allData                                   %>%
+  select(-ICULOS, -Age, -Gender, -HospAdmTime, -SepsisLabel)  %>%
+  group_by(patient)                         %>%
+  summarize_if(is.numeric, missingPercent)  %>%
+  ungroup()                                 
+
+missingPercentByPatient %>%
+  head() %>%
+  Show()
+```
+
+Median patient percent missing 
+
+```{r}
+medianPatientPercentMissing <- 
+  missingPercentByPatient  %>%
+  summarize_if(is.numeric, median)
+
+medianPatientPercentMissing  %>%
+  Show()
+```
+
+Transpose for better summary table
+
+```{r}
+percentMissingSummary <- 
+  tibble(Quantity = names(medianPatientPercentMissing),
+         MedianPatientPercentMissing = as.numeric(medianPatientPercentMissing[1,]))
+```
+
+```{r}
+percentMissingSummary %>%
+  Show()
+```
+
+# Sample Missingness Maps 
+
+Exclude variables always defined 
+
+## Sepsis Patient
+
+Example of a patient with sepsis indicated in first hour and all subsequent hours.
+
+```{r}
+library(Amelia)
+```
+
+```{r}
+sampleSepsisPatient <-
+  allData                        %>%
+  filter(patient == "p01072")    %>%
+  select(-patient, -ICULOS, -Age, -Gender, -HospAdmTime, -SepsisLabel)
+
+dim(sampleSepsisPatient)
+```
+
+```{r}
+missmap(sampleSepsisPatient,
+        main = "Missingness Map for p01072 - Sepsis Patient")
+```
+
+## Non-Sepsis Patient
+
+```{r}
+samplePatient <-
+  allData                      %>%
+  filter(patient == "p00003")  %>%
+  select(-patient, -ICULOS, -Age, -Gender, -HospAdmTime, -SepsisLabel)
+
+dim(samplePatient)
+```
+
+```{r}
+missmap(samplePatient,
+        main = "Missingness Map for p00003")
+```
+
+# Discussion
+
+When combined into a single dataset, the 5000 files contain 188,453 records with 42 fields.
+
+Fields always present: ICULOS, Age, Gender, HospAdmTime, SepsisLabel
+
+Fields with < 15% missing values:  HR, O2Sat, SBP, MAP, DBP
+
+Fields with 20% to 90% missing:  Temp, Resp, Glucose, Unit1, Unit2
+
+All other fields have > 90% missing values.
+
+The stats by patient are not encouraging either.  The median patient percent missing is 100% for 16 of the quantities.
+
+# Conclusions
+
+Are there are too many missing values for meaningful analysis of this data?
+
+Maybe.
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                                     
