@@ -136,6 +136,7 @@ patientSummary <-
             maxICULOS   = max(ICULOS),
             gapICULOS   = max(diff(ICULOS)),
             Sepsis      = max(SepsisLabel),
+            SepsisHours = sum(SepsisLabel),
             FirstSepsisHour = ICULOS[which(SepsisLabel == 1)][1],
             LastSepsisHour  = ICULOS[rev( which(SepsisLabel == 1) )][1],
             Duration        = LastSepsisHour - FirstSepsisHour + 1) %>%
@@ -162,6 +163,14 @@ Save file for review in Excel
 ```{r}
 write_xlsx(patientSummary, "Patient-Sepsis-Summary.xlsx")
 ```
+
+```{r}
+patientSummary  %>%
+  group_by(SepsisHours) %>%
+  count()       %>%
+  Show()
+```
+
 
 ## Sepsis Label
 
