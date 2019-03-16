@@ -192,6 +192,12 @@ table(patientSummary$Sepsis, useNA = "ifany")
 
 ### First Hour Sepsis Indicated
 
+The unexpected spike in the first hour is likely explained by this paper:
+
+M. Rothman, et al, [Sepsis as 2 problems: Identifying sepsis at admission and predicting onset in the hospital using an electronic medical record-based acuity score](https://www.ncbi.nlm.nih.gov/pubmed/?term=Sepsis+as+2+problems%3A+Identifying+sepsis+at+admissio), *Journal of Critical Care*, April 2017.
+
+> We present a new approach, recognizing that sepsis patients comprise 2 distinct and unequal populations: patients with sepsis present on admission (85%) and patients who develop sepsis in the hospital (15%).
+
 ```{r, comment=NA}
 firstSepsisHourCounts <-
   patientSummary              %>%
@@ -212,7 +218,7 @@ firstSepsisHourCounts     %>%
     scale_x_log10(breaks = LOSbreaks)                            +
     labs(title = "First Hour Sepsis Indicated",
          subtitle = paste(sum(firstSepsisHourCounts$n), "sepsis patients"), 
-         x = "First Hour", 
+         x = "First Sepsis Hour", 
          y = "Patient Counts",
          caption = c(plotCaptionLeft, plotCaptionRight))         +
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
