@@ -192,11 +192,15 @@ table(patientSummary$Sepsis, useNA = "ifany")
 
 ### First Hour Sepsis Indicated
 
-The unexpected spike in the first hour is likely explained by this paper:
+Let's recall the definition of `SepsisLabel`:   For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
 
-M. Rothman, et al, [Sepsis as 2 problems: Identifying sepsis at admission and predicting onset in the hospital using an electronic medical record-based acuity score](https://www.ncbi.nlm.nih.gov/pubmed/?term=Sepsis+as+2+problems%3A+Identifying+sepsis+at+admissio), *Journal of Critical Care*, April 2017.
+In a [posting to physionet, Matthew Reyna said](https://groups.google.com/forum/m/#!topic/physionet-challenges/fKwge1jq0Jg):  
 
-> We present a new approach, recognizing that sepsis patients comprise 2 distinct and unequal populations: patients with sepsis present on admission (85%) and patients who develop sepsis in the hospital (15%).
+>  ...although the sepsis rate is ~22%, we exclude patients who come to the ICU with sepsis or who develop sepsis within 4 hours of their ICU stay, resulting in a sepsis rate of 5.6% in our training data.  The fraction of windows labeled as septic is even smaller because patients who eventually develop sepsis typically have several non-septic windows prior to sepsis onset.
+
+> ...to encourage the early prediction of sepsis, the first window with SepsisLabel = 1 is before the onset time of sepsis, which is given by `t_sepsis` in the "Challenge Data" section of the website.  Therefore, although 20.1% of sepsis patients in the training data have `SepsisLabel = 1` in the first hour, this does not mean that 20.1% of sepsis patients were identified as septic upon admission -- as above, we excluded these patients.
+
+But there is an unexpected spike in the first hour (see below) for `SepsisLabel`, which means sepsis for those cases starts in the 6th hour?  How does that make sense, when all other hours are so much lower?
 
 ```{r, comment=NA}
 firstSepsisHourCounts <-
@@ -223,8 +227,6 @@ firstSepsisHourCounts     %>%
          caption = c(plotCaptionLeft, plotCaptionRight))         +
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
 ```
-
-
 
 ```{r}
 firstSepsisHourCounts  %>%
