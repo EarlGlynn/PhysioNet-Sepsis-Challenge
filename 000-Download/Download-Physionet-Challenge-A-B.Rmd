@@ -1,0 +1,90 @@
+---
+title: "Download Physionet 2019 Challenge"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style>
+                           
+efg | 2019-04-01
+
+>An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
+
+Start at [Physionet 2019 Challenge page](https://physionet.org/challenge/2019/) for general information.
+
+Here's the [download page](https://physionet.org/users/shared/challenge-2019/).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()
+```
+
+# Setup
+
+```{r}
+suppressPackageStartupMessages( library(R.utils) )   # downloadFile, gunzip
+suppressPackageStartupMessages( library(dplyr) )
+```
+
+```{r}
+rawDIR  <- "../../raw/"
+dataDIR <- "../../data" 
+```
+
+# Directories
+
+A *raw* directory will be created for the downloadeded ZIP, which will be unzipped to form the *data* directory.
+
+The *raw* directory could be deleted at the conclusion of this script, but that is left as a manual operation.
+
+```{r}
+if (!dir.exists(rawDIR)) dir.create(rawDIR)
+if (!dir.exists(dataDIR)) dir.create(dataDIR)
+```
+
+# Download ZIP file 
+
+```{r, comment=NA}
+URL <- "https://physionet.org/users/shared/challenge-2019/"
+```
+
+```{r, comment=NA}
+filenameA <- "training_setA.zip"
+downloadFile(paste0(URL, filenameA), path = rawDIR, mode = "wb",  quiet = TRUE)
+```
+
+```{r, comment=NA}
+filenameB <- "training_setB.zip"
+downloadFile(paste0(URL, filenameB), path = rawDIR, mode = "wb",  quiet = TRUE)
+```
+
+# Unzip
+
+```{r, comment=NA}
+unzip(paste0(rawDIR, filenameA), exdir = "../../data", setTimes = TRUE)
+```
+
+```{r, comment=NA}
+unzip(paste0(rawDIR, filenameB), exdir = "../../data", setTimes = TRUE)
+```
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`

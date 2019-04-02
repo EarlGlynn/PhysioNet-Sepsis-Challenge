@@ -1,0 +1,702 @@
+---
+title: "Demographics Stats - PhysioNet Sepsis Challenge"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style>
+
+efg | 2019-04-01
+
+>An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()
+```
+
+# Purpose
+
+The purpose of this notebook is to take a preliminary look at the raw data from 40,336 patients in the PhysioNet 2019 challenge, where some had sepsis and some did not.  
+
+The focus of this notebook is on the Demographics data (columns 35-40 in the raw files):
+
+
+| Quantity       | Units |               Description                         |
+|----------------|:-----:|---------------------------------------------------|
+| `Age`          | Years |                                                   |
+|`Gender`        |       | Female (0) or Male (1)                            |
+| `Unit1`        |       | Administrative identifier for ICU unit (MICU)     |
+| `Unit2`        |       | Administrative identifier for ICU unit (SICU)     |
+| `HospAdmTime`  | Hours | Time between hospital admit and ICU admit         |
+| `ICULOS`       | Hours | ICU length-of-stay (hours since ICU admit)        |      
+
+
+and the outcome (column 41)
+
+* `SepsisLabel`.  For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+
+# Background
+
+The data being analyzed is from the [Early Prediction of Sepsis from Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019](https://physionet.org/challenge/2019/).
+
+# Exploration
+
+## Setup
+
+```{r}
+plotCaptionLeft  <- "PhysioNet 2019 Sepsis Project"
+plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```
+
+```{r}
+LOSbreaks <- c(1, 8, 12, 18, 24, 30, 36, 48, 
+                             60, 72, 96, 192, 336)
+```
+
+### Packages
+
+```{r, comment=NA}
+library(tidyverse)
+library(writexl)
+library(kableExtra) # kable_styling
+```
+
+### Helper function
+
+```{r}
+Show <- function(data, caption="", bigMark="", ...)
+{
+  data                                          %>%
+  kable("html",
+        caption=caption,
+        format.args = list(big.mark=bigMark))   %>%
+  kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
+                position = "left", full_width = FALSE, ...)
+}
+```
+                                                          
+### Load PhysioNet 2019 Challenge Combined Data
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data-A.RData")
+dim(allDataA)
+```
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data-B.RData")
+dim(allDataB)
+```
+
+Combine A and B
+
+```{r}
+allData <- bind_rows(allDataA, allDataB)
+dim(allData)
+```
+
+Sample records
+
+```{r}
+allData    %>%
+  head(50) %>%
+  Show()   %>%
+  scroll_box(width = "800px", height = "500px")
+```
+
+### Create Patient Summary
+
+Verify certain values are constant for a patient 
+
+Not shown here, but I verified Age, Gender, Unit1 and Unit2 were constant for each patient.
+
+Shown here is proof that HospAdmTime does not change by patient.
+
+```{r}
+allData              %>%
+  group_by(patient)  %>%
+  summarize(minHospAdmTime = min(HospAdmTime),
+            maxHospAdmTime = max(HospAdmTime))  %>%
+  ungroup()          %>%
+  filter(minHospAdmTime != maxHospAdmTime)      %>%
+  Show()
+```
+
+So, let's grab the first value for most quantities, but verify range of ICULOS.
+
+```{r, comment=NA}
+patientSummary <- 
+  allData                               %>%
+  
+  group_by(patient)                     %>%
+  summarize(nRecord     = n(),
+            Age         = Age[1],
+            Gender      = Gender[1],
+            Unit1       = Unit1[1],
+            Unit2       = Unit2[1],
+            HospAdmTime = HospAdmTime[1],
+            minICULOS   = min(ICULOS),
+            maxICULOS   = max(ICULOS),
+            gapICULOS   = max(diff(ICULOS)),
+            Sepsis      = max(SepsisLabel),
+            SepsisHours = sum(SepsisLabel),
+            FirstSepsisHour = ICULOS[which(SepsisLabel == 1)][1],
+            LastSepsisHour  = ICULOS[rev( which(SepsisLabel == 1) )][1],
+            Duration        = LastSepsisHour - FirstSepsisHour + 1) %>%
+  ungroup()                             %>%
+  
+  mutate(Gender = recode(Gender,
+                         "0" = "Female",
+                         "1" = "Male"),
+         Sepsis = recode(Sepsis,
+                         "0" = "Non-Sepsis",
+                         "1" = "Sepsis"))
+
+nrow(patientSummary)
+```
+
+```{r}
+patientSummary %>% 
+  head()       %>%
+  Show(font_size = 9)
+```
+
+Save file for review in Excel
+
+```{r}
+write_xlsx(patientSummary, "Patient-Sepsis-Summary.xlsx")
+```
+
+```{r}
+patientSummary  %>%
+  group_by(SepsisHours) %>%
+  count()       %>%
+  Show()
+```
+
+
+## Sepsis Label
+
+### By Raw Data Record
+
+Only about `r round(100*sum(allData$SepsisLabel == 1) / nrow(allData),1)`% of raw records indicate sepsis.
+
+```{r, comment=NA}
+table(allData$SepsisLabel, useNA = "ifany")
+```
+
+### By Patient
+
+Only about `r round(100*sum(patientSummary$Sepsis == "Sepsis") / nrow(patientSummary),1)`% of the patients have sepsis.    
+
+```{r, comment=NA}
+table(patientSummary$Sepsis, useNA = "ifany")
+```
+
+### First Hour Sepsis Indicated
+
+Let's recall the definition of `SepsisLabel`:   For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+
+In a [posting to physionet, Matthew Reyna said](https://groups.google.com/forum/m/#!topic/physionet-challenges/fKwge1jq0Jg):  
+
+>  ...although the sepsis rate is ~22%, we exclude patients who come to the ICU with sepsis or who develop sepsis within 4 hours of their ICU stay, resulting in a sepsis rate of 5.6% in our training data.  The fraction of windows labeled as septic is even smaller because patients who eventually develop sepsis typically have several non-septic windows prior to sepsis onset.
+
+> ...to encourage the early prediction of sepsis, the first window with SepsisLabel = 1 is before the onset time of sepsis, which is given by `t_sepsis` in the "Challenge Data" section of the website.  Therefore, although 20.1% of sepsis patients in the training data have `SepsisLabel = 1` in the first hour, this does not mean that 20.1% of sepsis patients were identified as septic upon admission -- as above, we excluded these patients.
+
+But there is an unexpected spike in the first hour (see below) for `SepsisLabel`, which means sepsis for those cases starts in the 6th hour?  How does that make sense, when all other hours are so much lower?
+
+```{r, comment=NA}
+firstSepsisHourCounts <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(FirstSepsisHour)   %>%
+  count()                     %>%
+  ungroup()
+  
+nrow(firstSepsisHourCounts)
+```
+
+Sepsis reported in first hour for `r round(100 * firstSepsisHourCounts$n[1] / sum(firstSepsisHourCounts$n), 1)`% of sepsis patients.
+
+```{r}
+firstSepsisHourCounts     %>%
+  ggplot(aes(x = FirstSepsisHour, y = n))                        +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+  # scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title = "First Hour Sepsis Indicated",
+         subtitle = paste(sum(firstSepsisHourCounts$n), "sepsis patients"), 
+         x = "First Sepsis Hour", 
+         y = "Patient Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+```{r}
+firstSepsisHourCounts  %>%
+  head(10)             %>%
+  Show()
+```
+
+### Sepsis Time Span
+
+How many hours from first to last sepsis record for a sepsis patient?
+
+```{r, comment=NA}
+sepsisSpanHours <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(Duration)          %>%
+  count()                     %>%
+  ungroup()               
+  
+nrow(sepsisSpanHours)
+```
+
+```{r}
+Show(sepsisSpanHours)
+```
+
+### Sepsis Time Span for Patients with Sepsis Indicated First Hour
+
+```{r, comment=NA}
+patientSummary                  %>%
+  filter(Sepsis == "Sepsis", 
+         FirstSepsisHour == 1)  %>%
+  group_by(Duration)            %>%
+  count()                       %>%
+  ungroup()                     %>%
+  Show()
+```
+
+Does LastSepsisHour always match maxICULOS?
+
+```{r}
+patientSummary                         %>%
+  filter(Sepsis == "Sepsis", 
+         maxICULOS == LastSepsisHour)  %>%
+  count()                              %>%
+  Show()
+```
+
+Yes!
+
+### Example Sepsis patients with FirstSepsisHour = 1
+
+```{r, comment=NA}
+firstSepsisHour <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis",
+         FirstSepsisHour == 1)  
+
+nrow(firstSepsisHour)
+```
+
+```{r}
+firstSepsisHour  %>%
+  head(3)        %>%
+  Show()
+```
+
+
+#### 68 year old male
+
+```{r, comment=NA}
+example1 <- 
+  allData                      %>%
+  filter(patient == "p000056") 
+nrow(example1)
+```
+
+```{r}
+example1 %>% Show()
+```
+
+#### 87 year old female
+
+```{r}
+allData                         %>%
+  filter(patient == "p000260")  %>%
+  Show()
+```
+
+
+## Raw Records Per Patient
+
+There is one record per hour, but the first patient record is sometimes not hour 1.
+
+### All Patients
+
+The median number of records per patient is `r median(patientSummary$nRecord)`.
+
+```{r, comment=NA}
+quantile(patientSummary$nRecord,
+         c(0.0, 0.01, 0.10, 0.25, 0.50, 0.75, 0.90, 0.99, 1.00))
+```
+
+```{r}
+recordsPerPatient <-
+  patientSummary       %>%
+  group_by(nRecord)    %>%
+  count()              %>%
+  ungroup()
+```
+
+```{r}
+recordsPerPatient                                               %>%
+  ggplot(aes(x = nRecord, y = n))                                +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+  # scale_x_log10(breaks = LOSbreaks)                            +
+    xlim(0, 100)                                                 +
+    labs(title = "Records Per Patient",
+         subtitle = paste(sum(recordsPerPatient$n), "patients"), 
+         x = "Records Per Patient", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+What happened at age ~60?
+
+### Sepsis Patients
+
+```{r}
+recordsPerSepsisPatient <-
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  group_by(nRecord)           %>%
+  count()                     %>%
+  ungroup()
+```
+
+```{r}
+recordsPerSepsisPatient                                         %>%
+  ggplot(aes(x = nRecord, y = n))                                +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title = "Records Per Patient",
+         subtitle = paste(sum(recordsPerSepsisPatient$n), "patients"), 
+         x = "Records Per Patient", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+## Age
+
+### All Patients
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                 %>%
+  ggplot(aes(x = Age, y = ..density..))                         +
+    geom_histogram(fill="cornsilk", color="grey80", binwidth=1) +
+    geom_density()                                              +
+    scale_x_continuous(breaks = 10 * 1:10)                      +
+    labs(title    = "Patient Age",
+         subtitle = paste(nrow(patientSummary), "patients"),
+         x = "Age [Years]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))        +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+### By Sepsis Status
+
+```{r}
+sepsisCounts   <- table(patientSummary$Sepsis, useNA="ifany")
+sepsisFacetName <- paste0(names(sepsisCounts), "[", sepsisCounts, "]")
+
+sepsisLabeller <- function(variable, value)
+{
+  return(sepsisFacetName[value])
+}
+```
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                 %>%
+  ggplot(aes(x = Age, y = ..density..))                         +
+    geom_histogram(fill="cornsilk", color="grey80", binwidth=1) +
+    geom_density()                                              +
+    scale_x_continuous(breaks = 10 * 1:10)                      +
+    labs(title    = "Patient Age",
+         subtitle = paste(nrow(patientSummary), "patients"),
+         x = "Age [Years]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))        +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))        +
+    facet_wrap(~Sepsis, nrow=2, labeller = as_labeller(sepsisLabeller))
+```
+
+### By Gender
+
+```{r}
+genderCounts   <- table(patientSummary$Gender, useNA="ifany")
+genderFacetName <- paste0(names(genderCounts), "[", genderCounts, "]")
+
+genderLabeller <- function(variable, value)
+{
+  return(genderFacetName[value])
+}
+```
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                 %>%
+  ggplot(aes(x = Age, y = ..density..))                         +
+    geom_histogram(fill="cornsilk", color="grey80", binwidth=1) +
+    geom_density()                                              +
+    scale_x_continuous(breaks = 10 * 1:10)                      +
+    labs(title    = "Patient Age",
+         subtitle = paste(nrow(patientSummary), "patients"),
+         x = "Age [Years]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))        +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))        +
+    facet_wrap(~Gender, nrow=2, labeller = as_labeller(genderLabeller))
+```
+
+## Gender
+
+```{r, comment=NA}
+table(patientSummary$Gender, useNA = "ifany")
+```
+
+```{r, comment=NA}
+table(patientSummary$Sepsis, patientSummary$Gender, useNA = "ifany")
+```
+
+## Units
+
+Not sure how to use this information
+
+### Unit 1
+
+```{r, comment=NA}
+table(patientSummary$Unit1, useNA = "ifany")
+```
+
+### Unit 2
+
+```{r, comment=NA}
+table(patientSummary$Unit2, useNA = "ifany")
+```
+
+### Unit 1 and 2 are mutually exclusive when known
+
+```{r, comment=NA}
+table(patientSummary$Unit1, patientSummary$Unit2, useNA = "ifany")
+```
+
+## Hospital Admit Time 
+
+Hours between hospital admit and ICU admit
+
+#### All Patients
+
+Some large negative values
+
+```{r, comment=NA}
+quantile(patientSummary$HospAdmTime,
+         c(0.0, 0.01, 0.05, 0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99, 1.00), na.rm = TRUE)
+```
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                  %>%
+  ggplot(aes(x = HospAdmTime, y = ..density..))                  +
+    geom_histogram(fill="cornsilk", color="grey80", bins=100)    +
+    geom_density()                                               +
+    xlim(-250, 0)                                                +
+    labs(title    = "HospAdmTime",
+         subtitle = paste(nrow(patientSummary), "patients [",
+                          "excludes ~5% < -250 hours"),
+         x = "HospAdmTime [Hours]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+#### By Sepsis Status
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                  %>%
+  ggplot(aes(x = HospAdmTime, y = ..density..))                  +
+    geom_histogram(fill="cornsilk", color="grey80", bins=100)    +
+    geom_density()                                               +
+    xlim(-250, 0)                                                +
+    labs(title    = "HospAdmTime",
+         subtitle = paste(nrow(patientSummary), "patients [",
+                          "excludes ~5% < -250 hours"),
+         x = "HospAdmTime [Hours]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))         +
+    facet_wrap(~Sepsis, nrow=2, labeller = as_labeller(sepsisLabeller))
+```
+
+## ICU length-of-stay
+
+### Always starts at hour 1?
+
+```{r, comment=NA}
+table(patientSummary$minICULOS, useNA = "ifany")
+```
+
+That's not the case.  Examples:
+
+```{r}
+patientSummary           %>%
+  filter(minICULOS > 8)  %>%
+  Show()                 %>%
+  scroll_box(height = "400px")
+```
+
+Verified p01195 started at hour 9 and continued through hour 51.
+
+### Hourly gap(s) after first reported hour?
+
+```{r, comment=NA}
+table(patientSummary$gapICULOS, useNA = "ifany")
+```
+
+No gaps!
+
+### ICULOS All Patients
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                  %>%
+  ggplot(aes(x = maxICULOS, y = ..density..))                    +
+    geom_histogram(fill="cornsilk", color="grey80", bins=50)     +
+    geom_density()                                               +
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICU Length-of-Stay",
+         subtitle = paste(nrow(patientSummary), "patients"),
+         x = "LOS [Hours]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+Bimodal peaks always beg for an interpretation!
+
+### ICULOS By Sepsis Status
+
+```{r, fig.width=8, fig.height=6}
+patientSummary                                                  %>%
+  ggplot(aes(x = maxICULOS, y = ..density..))                    +
+    geom_histogram(fill="cornsilk", color="grey80", bins=50)     +
+    geom_density()                                               +
+    scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICU Length-of-Stay",
+         subtitle = paste(nrow(patientSummary), "patients"),
+         x = "LOS [Hours]",                        
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))         +
+    facet_wrap(~Sepsis, nrow=2, labeller = as_labeller(sepsisLabeller))
+```
+
+Two modes not seen in sepsis patients.
+
+## ICU Hours Recorded
+
+Nearly the same as number of records per patient.
+
+### All Patients, All Hours
+
+```{r}
+byHour <- 
+  allData                  %>%
+  filter(SepsisLabel == 1) %>%
+  group_by(ICULOS)         %>%
+  count()                  %>%
+  ungroup()
+```
+
+```{r}
+byHour                                                          %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+    #geom_density()                                              +
+   # scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (All Patients, All Hours)",
+         subtitle = paste(nrow(allData), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+### Sepsis Patients, All Hours
+
+```{r, comment=NA}
+byHourSepsisPatient <- 
+  patientSummary              %>%
+  filter(Sepsis == "Sepsis")  %>%
+  select(patient)             %>%
+  inner_join(allData, by = "patient")  %>%
+  group_by(ICULOS)            %>%
+  count()                     %>%
+  ungroup()
+
+nrow(byHourSepsisPatient)
+```
+
+```{r}
+byHourSepsisPatient                                             %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+    #geom_density()                                              +
+    #scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (Sepsis Patients, All Hours)",
+         subtitle = paste(sum(byHourSepsisPatient$n), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+### Sepsis Patients, Sepsis Hours
+
+```{r, comment=NA}
+byHourSepsisPatient <- 
+  allData                     %>%
+  filter(SepsisLabel == 1)    %>%
+  group_by(ICULOS)            %>%
+  count()                     %>%
+  ungroup()
+
+nrow(byHourSepsisPatient)
+```
+
+```{r}
+byHourSepsisPatient                                             %>%
+  ggplot(aes(x = ICULOS, y = n))                                 +
+    geom_bar(stat = "identity", fill="blue")                     +
+#   scale_x_log10(breaks = LOSbreaks)                            +
+    labs(title    = "ICULOS Hours (Sepsis Patients, Sepsis Hours)",
+         subtitle = paste(sum(byHourSepsisPatient$n), "records"),
+         x = "ICULOS [Hour]", 
+         y = "Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+# Discussion
+
+[work in progress]
+
+# Conclusions
+
+[work in progress]
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                                     

@@ -1,0 +1,269 @@
+---
+title: "Combine PhysioNet Challenge 2019 Files"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style> 
+
+efg | 2019-04-01
+
+>An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()  
+```
+
+Combine all 2019 challenge files by directory into a single file for analysis.
+
+# Setup
+
+Directory structure
+
+```
+PhysioNet-2019
+    raw
+    data
+        trainingA
+          [20336 files]
+        trainingB
+          [20000 files]
+    R
+        000-Download
+        010-Count-Characters
+        020-Combine-Files
+        ...
+```
+
+## Packages
+
+```{r, comment=NA}
+library(tidyverse)
+library(kableExtra) # kable_styling
+library(writexl)
+```
+
+## Helper function
+
+```{r}
+Show <- function(data, caption="", bigMark="")
+{
+  data                                          %>%
+  kable("html",
+        caption=caption,
+        format.args = list(big.mark=bigMark))   %>%
+  kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
+                position = "left", full_width = FALSE)
+}
+```                  
+
+# Make list of PhysioNet .psv files by directory
+
+Assume files previously unzipped into this directory relative to project directory.
+
+```{r, comment=NA}
+dataDirA <- "../../data/trainingA" 
+filesA <- list.files(dataDirA, full.names=TRUE)
+length(filesA)
+```
+
+```{r, comment=NA}
+dataDirB <- "../../data/trainingB" 
+filesB <- list.files(dataDirB, full.names=TRUE)
+length(filesB)
+```
+
+# Combine all files into single tibble
+
+## Function to read single .psv file
+
+Add filename as first column.  Move ICULOS to second column.
+
+Convert NaNs to NAs while reading so tidyr fill function can be used more easily later.
+
+```{r}
+readPSV <- function(filepath)
+{
+  filename <- substr(basename(filepath), 1, nchar(basename(filepath))-4)
+  d <-  
+    read_delim(filepath, "|", 
+               col_types = cols(.default = col_double()),
+               na = "NaN")                                    %>%
+    mutate(patient = filename)                                %>%
+    select(patient, ICULOS, everything())
+  
+  d
+}
+```
+
+## map_df from purrr does heavy lifting
+
+[Reading and combining many tidy data files in R](https://serialmentor.com/blog/2016/6/13/reading-and-combining-many-tidy-data-files-in-R).
+
+```{r, comment=NA}
+allDataA <- filesA %>%
+  map_df(readPSV)  
+
+nrow(allDataA)
+```
+
+```{r, comment=NA}
+allDataB <- filesB %>%
+  map_df(readPSV)  
+
+nrow(allDataB)
+```
+
+## Structure of tibbles
+
+Should be the same
+
+### A
+
+```{r, comment=NA}
+str(allDataA)
+```
+
+### B
+
+```{r, comment=NA}
+str(allDataB)
+```
+
+## Write to Excel file
+
+```{r}
+write_xlsx(allDataA, "../../data/PhysioNet-2019-Raw-Data-A.xlsx")
+write_xlsx(allDataB, "../../data/PhysioNet-2019-Raw-Data-B.xlsx")
+```
+
+## Save R object for quicker loading later
+
+```{r}
+save(allDataA, file = "../../data/PhysioNet-2019-Raw-Data-A.RData")
+save(allDataB, file = "../../data/PhysioNet-2019-Raw-Data-B.RData")
+```
+
+# Record counts
+
+## A
+
+```{r}
+allDataCountsA <- 
+  allDataA                                     %>%
+  summarize(nRecord  = n(),
+            nPatient = n_distinct(patient))
+
+allDataCountsA %>%
+  Show()
+```
+
+## B
+
+```{r}
+allDataCountsB <- 
+  allDataB                                     %>%
+  summarize(nRecord  = n(),
+            nPatient = n_distinct(patient))
+
+allDataCountsB %>%
+  Show()
+```
+
+## Sepsis records
+
+```{r}
+sepsisDataCountsA <-
+  allDataA                   %>%
+  filter(SepsisLabel == 1)   %>%
+  summarize(nRecord  = n(),
+            nPatient = n_distinct(patient)) 
+
+sepsisDataCountsA %>%
+  Show()
+```
+
+```{r}
+sepsisDataCountsB <-
+  allDataB                   %>%
+  filter(SepsisLabel == 1)   %>%
+  summarize(nRecord  = n(),
+            nPatient = n_distinct(patient)) 
+
+sepsisDataCountsB %>%
+  Show()
+```
+
+## Percent Sepsis
+
+### A
+
+```{r, comment=NA}
+sepsisDataCountsA$nRecord
+allDataCountsA$nRecord
+
+sprintf("%.2f%% sepsis records",
+        100 * sepsisDataCountsA$nRecord  / allDataCountsA$nRecord)
+```
+
+```{r, comment=NA}
+sepsisDataCountsA$nPatient
+allDataCountsA$nPatient
+
+sprintf("%.2f%% sepsis patients",
+        100 * sepsisDataCountsA$nPatient / allDataCountsA$nPatient)
+```
+
+### B
+
+```{r, comment=NA}
+sepsisDataCountsB$nRecord
+allDataCountsB$nRecord
+
+sprintf("%.2f%% sepsis records",
+        100 * sepsisDataCountsB$nRecord  / allDataCountsB$nRecord)
+```
+
+```{r, comment=NA}
+sepsisDataCountsB$nPatient
+allDataCountsB$nPatient
+
+sprintf("%.2f%% sepsis patients",
+        100 * sepsisDataCountsB$nPatient / allDataCountsB$nPatient)
+```
+
+# Sample records
+
+```{r}
+head(allDataA)  %>% 
+  Show()        %>%
+  scroll_box(width = "1000px")
+```
+
+```{r}
+tail(allDataB) %>% 
+  Show()       %>%
+  scroll_box(width = "1000px")
+```
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                      

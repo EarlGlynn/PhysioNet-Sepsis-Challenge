@@ -1,0 +1,211 @@
+---
+title: "Laboratory Values Stats - PhysioNet Sepsis Challenge"
+output:
+  html_document:
+    toc: yes
+    number_sections: yes
+  html_notebook:
+    toc: yes
+---
+
+<style type="text/css">
+div#TOC li {
+    list-style:none;
+    background-image:none;
+    background-repeat:none;
+    background-position:0;
+}
+</style>
+
+efg | 2019-04-01
+
+>An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
+ 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+time.1 <- Sys.time()
+```
+
+# Purpose
+
+The purpose of this notebook is to take a preliminary look at the raw data from 40,336 patients in the PhysioNet 2019 challenge, where some had sepsis and some did not.  
+
+The focus of this notebook is on the **Laboratory Values** data (**columns 9 - 34**) and the outcome (column 41)
+
+* `SepsisLabel`.  For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+
+# Background
+
+The data being analyzed is from the [Early Prediction of Sepsis from Clinical Data: the PhysioNet/Computing in Cardiology Challenge 2019](https://physionet.org/challenge/2019/).
+
+# Exploration
+
+## Setup
+
+```{r}
+plotCaptionLeft  <- "Source:  PhysioNet 2019 Sepsis Project"
+plotCaptionRight <- paste("efg", format(Sys.time(), "%Y-%m-%d"))
+```
+
+### Packages
+
+```{r, comment=NA}
+library(tidyverse)
+library(kableExtra) # kable_styling
+library(readxl)
+
+library(gridExtra)
+library(grid)
+```
+
+### Helper function
+
+```{r}
+Show <- function(data, caption="", bigMark="")
+{
+  data                                          %>%
+  kable("html",
+        caption=caption,
+        format.args = list(big.mark=bigMark))   %>%
+  kable_styling(bootstrap_options = c("striped", "bordered", "condensed"),
+                position = "left", full_width = FALSE)
+}
+```
+            
+### Laboratory Values List and Units
+
+From file Laboratory-Values.xlsx
+           
+```{r, echo=FALSE}
+labValues <- 
+  read_xlsx("Laboratory-Values.xlsx")  %>%
+  arrange(Quantity)
+
+labValues %>%
+  Show()
+```
+
+The lab values are sorted here by Quantity name, which is a different order than in the file.
+
+### Load PhysioNet 2019 Challenge Combined Data
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data-A.RData")
+dim(allDataA)
+```
+
+```{r, comment=NA}
+load(file = "../../data/PhysioNet-2019-Raw-Data-B.RData")
+dim(allDataB)
+```
+
+Combine A and B
+
+```{r}
+allData <- bind_rows(allDataA, allDataB)
+dim(allData)
+```
+
+Verify Laboratory Values match
+
+```{r, comment=NA}
+all(labValues$Quantity %in% names(allData))
+```
+
+Sample Laboratory Values
+
+```{r}
+allData                                           %>%
+  select( patient, ICULOS, 
+          labValues$Quantity,
+          SepsisLabel)                            %>%
+  head()                                          %>%
+  Show()  
+```
+
+## Sepsis Label
+
+```{r, comment=NA}
+table(allData$SepsisLabel, useNA = "ifany")
+```
+
+## Laboratory Values
+
+```{r, results="asis", fig.width=8, fig.height=6}
+for (i in 1:nrow(labValues))
+{
+  cat("\n###", paste(labValues$Quantity[i], " - ", 
+                     labValues$Description[i]), "\n")
+  
+  rawData <- 
+    allData                                      %>%
+    select(labValues$Quantity[i], SepsisLabel)   %>%
+    na.omit()                                    %>%
+    mutate(Sepsis = recode(SepsisLabel,
+                           "0" = "Not Sepsis",
+                           "1" = "Sepsis"))      %>%
+    mutate(Sepsis = as.factor(Sepsis))
+  
+  if (labValues$Units[i] == "-")
+  {
+    quantityUnits <- ""    # display no units
+  } else
+  {
+    quantityUnits <- paste0("[", labValues$Units[i], "]")
+  }
+   
+  valueBoxplot <- 
+    ggplot(rawData, 
+           aes_string("Sepsis", 
+                      labValues$Quantity[i], 
+                      fill = "Sepsis"))                       +
+    geom_boxplot(notch = TRUE)                                +
+    scale_x_discrete(labels = paste(c("Not Sepsis", "Sepsis"),
+                                    paste0("n = ", 
+                                           table(rawData$Sepsis)) , 
+                                    sep = "\n") )             +
+    labs(title = paste(labValues$Quantity[i], " - ", 
+                       labValues$Description[i]),
+         x = "",
+         y = paste0(labValues$Quantity[i], quantityUnits))    +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)    +
+    theme(legend.position = "none",
+          plot.margin = unit(c(5, 5, 5, 12), "mm"))           +
+    coord_flip()
+  
+  valueDensity <- 
+    ggplot(rawData, aes_string(x = labValues$Quantity[i]))    +
+    geom_density(aes_string(group = "Sepsis", fill = "Sepsis"), 
+                 alpha = 0.5)   +
+    labs(x = paste0(labValues$Quantity[i], quantityUnits),
+         caption = c(plotCaptionLeft, plotCaptionRight))      +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)    +
+    theme(plot.caption = element_text(hjust = c(0, 1)),
+          legend.position = "none",
+          plot.margin = unit(c(5, 5, 5, 20), "mm"))
+  
+  grid.arrange(valueBoxplot, valueDensity)
+  
+  cat("\n")
+}
+```
+
+# Discussion
+
+Need to impose limits since outliers distort some charts too much.
+
+[work in progress]
+
+# Conclusions
+
+[work in progress]
+
+```{r, echo=FALSE}
+time.2 <- Sys.time()
+processingTime <- paste("Processing time:", sprintf("%.1f",
+                        as.numeric(difftime(time.2,
+                                            time.1, units="secs"))), "secs\n")
+```
+
+`r processingTime`
+`r format(time.2, "%Y-%m-%d %H%M")`                                     
