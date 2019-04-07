@@ -419,7 +419,7 @@ div#TOC li {
     background-position:0;
 }
 </style>
-<p>efg | 2019-04-01</p>
+<p>efg | 2019-04-05</p>
 <blockquote>
 <p>An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).</p>
 </blockquote>
@@ -442,7 +442,7 @@ div#TOC li {
 <div id="packages" class="section level2">
 <h2><span class="header-section-number">1.1</span> Packages</h2>
 <pre class="r"><code>library(tidyverse)</code></pre>
-<pre><code>-- Attaching packages --------------------------------------------------------------------- tidyverse 1.2.1 --</code></pre>
+<pre><code>-- Attaching packages -------------------------------------------------------------------------------------------------- tidyverse 1.2.1 --</code></pre>
 <pre><code>v ggplot2 3.1.0       v purrr   0.3.0  
 v tibble  2.0.1       v dplyr   0.8.0.1
 v tidyr   0.8.2       v stringr 1.4.0  
@@ -454,7 +454,7 @@ v readr   1.3.1       v forcats 0.4.0  </code></pre>
 <pre><code>Warning: package &#39;dplyr&#39; was built under R version 3.5.2</code></pre>
 <pre><code>Warning: package &#39;stringr&#39; was built under R version 3.5.2</code></pre>
 <pre><code>Warning: package &#39;forcats&#39; was built under R version 3.5.2</code></pre>
-<pre><code>-- Conflicts ------------------------------------------------------------------------ tidyverse_conflicts() --
+<pre><code>-- Conflicts ----------------------------------------------------------------------------------------------------- tidyverse_conflicts() --
 x dplyr::filter() masks stats::filter()
 x dplyr::lag()    masks stats::lag()</code></pre>
 <pre class="r"><code>library(kableExtra) # kable_styling</code></pre>
@@ -493,6 +493,7 @@ length(filesB)</code></pre>
 </div>
 <div id="combine-all-files-into-single-tibble" class="section level1">
 <h1><span class="header-section-number">3</span> Combine all files into single tibble</h1>
+<p>Add <code>Source</code> of <code>A</code> or <code>B</code> to track origin of data</p>
 <div id="function-to-read-single-.psv-file" class="section level2">
 <h2><span class="header-section-number">3.1</span> Function to read single .psv file</h2>
 <p>Add filename as first column. Move ICULOS to second column.</p>
@@ -513,13 +514,19 @@ length(filesB)</code></pre>
 <div id="map_df-from-purrr-does-heavy-lifting" class="section level2">
 <h2><span class="header-section-number">3.2</span> map_df from purrr does heavy lifting</h2>
 <p><a href="https://serialmentor.com/blog/2016/6/13/reading-and-combining-many-tidy-data-files-in-R">Reading and combining many tidy data files in R</a>.</p>
-<pre class="r"><code>allDataA &lt;- filesA %&gt;%
-  map_df(readPSV)  
+<pre class="r"><code>allDataA &lt;- 
+  filesA               %&gt;%
+  map_dfr(readPSV)     %&gt;% 
+  mutate(Source = &quot;A&quot;) %&gt;%
+  select(Source, everything())
 
 nrow(allDataA)</code></pre>
 <pre><code>[1] 790215</code></pre>
-<pre class="r"><code>allDataB &lt;- filesB %&gt;%
-  map_df(readPSV)  
+<pre class="r"><code>allDataB &lt;- 
+  filesB               %&gt;%
+  map_dfr(readPSV)     %&gt;% 
+  mutate(Source = &quot;B&quot;) %&gt;%
+  select(Source, everything())
 
 nrow(allDataB)</code></pre>
 <pre><code>[1] 761995</code></pre>
@@ -530,7 +537,8 @@ nrow(allDataB)</code></pre>
 <div id="a" class="section level3">
 <h3><span class="header-section-number">3.3.1</span> A</h3>
 <pre class="r"><code>str(allDataA)</code></pre>
-<pre><code>Classes &#39;spec_tbl_df&#39;, &#39;tbl_df&#39;, &#39;tbl&#39; and &#39;data.frame&#39;:    790215 obs. of  42 variables:
+<pre><code>Classes &#39;spec_tbl_df&#39;, &#39;tbl_df&#39;, &#39;tbl&#39; and &#39;data.frame&#39;:    790215 obs. of  43 variables:
+ $ Source          : chr  &quot;A&quot; &quot;A&quot; &quot;A&quot; &quot;A&quot; ...
  $ patient         : chr  &quot;p000001&quot; &quot;p000001&quot; &quot;p000001&quot; &quot;p000001&quot; ...
  $ ICULOS          : num  1 2 3 4 5 6 7 8 9 10 ...
  $ HR              : num  NA 97 89 90 103 110 108 106 104 102 ...
@@ -577,7 +585,8 @@ nrow(allDataB)</code></pre>
 <div id="b" class="section level3">
 <h3><span class="header-section-number">3.3.2</span> B</h3>
 <pre class="r"><code>str(allDataB)</code></pre>
-<pre><code>Classes &#39;spec_tbl_df&#39;, &#39;tbl_df&#39;, &#39;tbl&#39; and &#39;data.frame&#39;:    761995 obs. of  42 variables:
+<pre><code>Classes &#39;spec_tbl_df&#39;, &#39;tbl_df&#39;, &#39;tbl&#39; and &#39;data.frame&#39;:    761995 obs. of  43 variables:
+ $ Source          : chr  &quot;B&quot; &quot;B&quot; &quot;B&quot; &quot;B&quot; ...
  $ patient         : chr  &quot;p100001&quot; &quot;p100001&quot; &quot;p100001&quot; &quot;p100001&quot; ...
  $ ICULOS          : num  1 2 3 4 5 6 7 8 9 10 ...
  $ HR              : num  NA 93 91 93 93 NA 91.5 94 94 102 ...
@@ -643,7 +652,7 @@ save(allDataB, file = &quot;../../data/PhysioNet-2019-Raw-Data-B.RData&quot;)</c
             nPatient = n_distinct(patient))
 
 allDataCountsA %&gt;%
-  Show()</code></pre>
+  Show(bigMark = &quot;,&quot;)</code></pre>
 <table class="table table-striped table-bordered table-condensed" style="width: auto !important; ">
 <caption>
 </caption>
@@ -660,10 +669,10 @@ nPatient
 <tbody>
 <tr>
 <td style="text-align:right;">
-790215
+790,215
 </td>
 <td style="text-align:right;">
-20336
+20,336
 </td>
 </tr>
 </tbody>
@@ -677,7 +686,7 @@ nPatient
             nPatient = n_distinct(patient))
 
 allDataCountsB %&gt;%
-  Show()</code></pre>
+  Show(bigMark = &quot;,&quot;)</code></pre>
 <table class="table table-striped table-bordered table-condensed" style="width: auto !important; ">
 <caption>
 </caption>
@@ -694,10 +703,10 @@ nPatient
 <tbody>
 <tr>
 <td style="text-align:right;">
-761995
+761,995
 </td>
 <td style="text-align:right;">
-20000
+20,000
 </td>
 </tr>
 </tbody>
@@ -712,7 +721,7 @@ nPatient
             nPatient = n_distinct(patient)) 
 
 sepsisDataCountsA %&gt;%
-  Show()</code></pre>
+  Show(bigMark = &quot;,&quot;)</code></pre>
 <table class="table table-striped table-bordered table-condensed" style="width: auto !important; ">
 <caption>
 </caption>
@@ -729,10 +738,10 @@ nPatient
 <tbody>
 <tr>
 <td style="text-align:right;">
-17136
+17,136
 </td>
 <td style="text-align:right;">
-1790
+1,790
 </td>
 </tr>
 </tbody>
@@ -744,7 +753,7 @@ nPatient
             nPatient = n_distinct(patient)) 
 
 sepsisDataCountsB %&gt;%
-  Show()</code></pre>
+  Show(bigMark = &quot;,&quot;)</code></pre>
 <table class="table table-striped table-bordered table-condensed" style="width: auto !important; ">
 <caption>
 </caption>
@@ -761,10 +770,10 @@ nPatient
 <tbody>
 <tr>
 <td style="text-align:right;">
-10780
+10,780
 </td>
 <td style="text-align:right;">
-1142
+1,142
 </td>
 </tr>
 </tbody>
@@ -819,6 +828,9 @@ nPatient
 </caption>
 <thead>
 <tr>
+<th style="text-align:left;">
+Source
+</th>
 <th style="text-align:left;">
 patient
 </th>
@@ -950,6 +962,9 @@ SepsisLabel
 <tbody>
 <tr>
 <td style="text-align:left;">
+A
+</td>
+<td style="text-align:left;">
 p000001
 </td>
 <td style="text-align:right;">
@@ -1077,6 +1092,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+A
+</td>
 <td style="text-align:left;">
 p000001
 </td>
@@ -1206,6 +1224,9 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;">
+A
+</td>
+<td style="text-align:left;">
 p000001
 </td>
 <td style="text-align:right;">
@@ -1333,6 +1354,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+A
+</td>
 <td style="text-align:left;">
 p000001
 </td>
@@ -1462,6 +1486,9 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;">
+A
+</td>
+<td style="text-align:left;">
 p000001
 </td>
 <td style="text-align:right;">
@@ -1589,6 +1616,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+A
+</td>
 <td style="text-align:left;">
 p000001
 </td>
@@ -1729,6 +1759,9 @@ NA
 <thead>
 <tr>
 <th style="text-align:left;">
+Source
+</th>
+<th style="text-align:left;">
 patient
 </th>
 <th style="text-align:right;">
@@ -1859,6 +1892,9 @@ SepsisLabel
 <tbody>
 <tr>
 <td style="text-align:left;">
+B
+</td>
+<td style="text-align:left;">
 p120000
 </td>
 <td style="text-align:right;">
@@ -1986,6 +2022,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+B
+</td>
 <td style="text-align:left;">
 p120000
 </td>
@@ -2115,6 +2154,9 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;">
+B
+</td>
+<td style="text-align:left;">
 p120000
 </td>
 <td style="text-align:right;">
@@ -2242,6 +2284,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+B
+</td>
 <td style="text-align:left;">
 p120000
 </td>
@@ -2371,6 +2416,9 @@ NA
 </tr>
 <tr>
 <td style="text-align:left;">
+B
+</td>
+<td style="text-align:left;">
 p120000
 </td>
 <td style="text-align:right;">
@@ -2498,6 +2546,9 @@ NA
 </td>
 </tr>
 <tr>
+<td style="text-align:left;">
+B
+</td>
 <td style="text-align:left;">
 p120000
 </td>
@@ -2628,8 +2679,8 @@ NA
 </tbody>
 </table>
 </div>
-<p>Processing time: 304.4 secs</p>
-<p>2019-04-01 2208</p>
+<p>Processing time: 313.4 secs</p>
+<p>2019-04-06 2337</p>
 </div>
 
 

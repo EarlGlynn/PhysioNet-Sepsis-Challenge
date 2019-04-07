@@ -17,7 +17,7 @@ div#TOC li {
 }
 </style> 
 
-efg | 2019-04-01
+efg | 2019-04-05
 
 >An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
 
@@ -87,6 +87,8 @@ length(filesB)
 
 # Combine all files into single tibble
 
+Add `Source` of `A` or `B` to track origin of data
+
 ## Function to read single .psv file
 
 Add filename as first column.  Move ICULOS to second column.
@@ -113,15 +115,21 @@ readPSV <- function(filepath)
 [Reading and combining many tidy data files in R](https://serialmentor.com/blog/2016/6/13/reading-and-combining-many-tidy-data-files-in-R).
 
 ```{r, comment=NA}
-allDataA <- filesA %>%
-  map_df(readPSV)  
+allDataA <- 
+  filesA               %>%
+  map_dfr(readPSV)     %>% 
+  mutate(Source = "A") %>%
+  select(Source, everything())
 
 nrow(allDataA)
 ```
 
 ```{r, comment=NA}
-allDataB <- filesB %>%
-  map_df(readPSV)  
+allDataB <- 
+  filesB               %>%
+  map_dfr(readPSV)     %>% 
+  mutate(Source = "B") %>%
+  select(Source, everything())
 
 nrow(allDataB)
 ```
@@ -167,7 +175,7 @@ allDataCountsA <-
             nPatient = n_distinct(patient))
 
 allDataCountsA %>%
-  Show()
+  Show(bigMark = ",")
 ```
 
 ## B
@@ -179,7 +187,7 @@ allDataCountsB <-
             nPatient = n_distinct(patient))
 
 allDataCountsB %>%
-  Show()
+  Show(bigMark = ",")
 ```
 
 ## Sepsis records
@@ -192,7 +200,7 @@ sepsisDataCountsA <-
             nPatient = n_distinct(patient)) 
 
 sepsisDataCountsA %>%
-  Show()
+  Show(bigMark = ",")
 ```
 
 ```{r}
@@ -203,7 +211,7 @@ sepsisDataCountsB <-
             nPatient = n_distinct(patient)) 
 
 sepsisDataCountsB %>%
-  Show()
+  Show(bigMark = ",")
 ```
 
 ## Percent Sepsis
