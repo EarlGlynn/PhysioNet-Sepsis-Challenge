@@ -20,6 +20,14 @@ div#TOC li {
 efg | 2019-04-01
 
 >An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
+
+efg | 2019-05-12
+
+Updated units for Platelets and WBC after PhysioNet forum posting on 2019-04-17 by Gari Clifford.
+
+efg | 2019-05-19
+
+Encountered [pandoc document conversion failed with error 11 #4462](https://github.com/rstudio/rstudio/issues/4462) after R upgrade to 3.6.0 and latest RStudio.  Fix in link from RStudio resolved the problem.
  
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
@@ -56,6 +64,8 @@ library(readxl)
 
 library(gridExtra)
 library(grid)
+
+library(e1071)      # skewness, kurtosis
 ```
 
 ### Helper function
@@ -74,11 +84,12 @@ Show <- function(data, caption="", bigMark="")
             
 ### Laboratory Values List and Units
 
-From file Laboratory-Values.xlsx
+From file `Laboratory-Values.xlsx` but order by `Quantity` label.
            
-```{r, echo=FALSE}
+```{r}
 labValues <- 
-  read_xlsx("Laboratory-Values.xlsx")  %>%
+  read_xlsx("Laboratory-Values.xlsx")              %>%
+  mutate(Units = ifelse(is.na(Units), "", Units))  %>%
   arrange(Quantity)
 
 labValues %>%
@@ -115,12 +126,13 @@ all(labValues$Quantity %in% names(allData))
 Sample Laboratory Values
 
 ```{r}
-allData                                           %>%
+allData                        %>%
   select( patient, ICULOS, 
           labValues$Quantity,
-          SepsisLabel)                            %>%
-  head()                                          %>%
-  Show()  
+          SepsisLabel)         %>%
+  head()                       %>%
+  Show()                       %>%
+  scroll_box(width = "800px")
 ```
 
 ## Sepsis Label
@@ -134,8 +146,18 @@ table(allData$SepsisLabel, useNA = "ifany")
 ```{r, results="asis", fig.width=8, fig.height=6}
 for (i in 1:nrow(labValues))
 {
-  cat("\n###", paste(labValues$Quantity[i], " - ", 
-                     labValues$Description[i]), "\n")
+  titleLine <- labValues$Quantity[i]
+  if (titleLine != labValues$Description[i])
+  {
+    titleLine <- paste(titleLine, " - ", labValues$Description[i])
+  }
+  
+  cat("\n###", titleLine, "\n")   # dynamic header in markdown
+  
+  if (labValues$Quantity[i] %in% c("Platelets", "WBC"))
+  {
+    cat("\nUnits updated after PhysioNet forum posting by Gari Clifford on 2019-04-17\n")
+  }               
   
   rawData <- 
     allData                                      %>%
@@ -146,11 +168,14 @@ for (i in 1:nrow(labValues))
                            "1" = "Sepsis"))      %>%
     mutate(Sepsis = as.factor(Sepsis))
   
-  if (labValues$Units[i] == "-")
+  counts <- table(rawData$Sepsis)
+  rawDataLabels <- names(counts)
+  rawDataCounts <- str_trim( format(counts, big.mark = ",") )
+  
+  if (nchar(labValues$Units[i]) == 0)
   {
     quantityUnits <- ""    # display no units
-  } else
-  {
+  } else {
     quantityUnits <- paste0("[", labValues$Units[i], "]")
   }
    
@@ -158,37 +183,67 @@ for (i in 1:nrow(labValues))
     ggplot(rawData, 
            aes_string("Sepsis", 
                       labValues$Quantity[i], 
-                      fill = "Sepsis"))                       +
-    geom_boxplot(notch = TRUE)                                +
-    scale_x_discrete(labels = paste(c("Not Sepsis", "Sepsis"),
+                      fill = "Sepsis"))                        +
+    geom_boxplot(notch = TRUE)                                 +
+    ylim(labValues$MinPlotValue[i], labValues$MaxPlotValue[i]) +
+    scale_x_discrete(labels = paste(rawDataLabels,
                                     paste0("n = ", 
-                                           table(rawData$Sepsis)) , 
-                                    sep = "\n") )             +
-    labs(title = paste(labValues$Quantity[i], " - ", 
-                       labValues$Description[i]),
+                                           rawDataCounts), 
+                                    sep = "\n") )              +
+    labs(title = titleLine,
          x = "",
-         y = paste0(labValues$Quantity[i], quantityUnits))    +
-    scale_fill_brewer(palette = "Pastel1", direction = -1)    +
+         y = paste0(labValues$Quantity[i], quantityUnits))     +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)     +
     theme(legend.position = "none",
-          plot.margin = unit(c(5, 5, 5, 12), "mm"))           +
+          plot.margin = unit(c(5, 5, 5, 12), "mm"))            +
     coord_flip()
   
   valueDensity <- 
-    ggplot(rawData, aes_string(x = labValues$Quantity[i]))    +
+    ggplot(rawData, aes_string(x = labValues$Quantity[i]))     +
     geom_density(aes_string(group = "Sepsis", fill = "Sepsis"), 
-                 alpha = 0.5)   +
+                 alpha = 0.5)                                  +
+    xlim(labValues$MinPlotValue[i], labValues$MaxPlotValue[i]) +
     labs(x = paste0(labValues$Quantity[i], quantityUnits),
-         caption = c(plotCaptionLeft, plotCaptionRight))      +
-    scale_fill_brewer(palette = "Pastel1", direction = -1)    +
+         caption = c(plotCaptionLeft, plotCaptionRight))       +
+    scale_fill_brewer(palette = "Pastel1", direction = -1)     +
     theme(plot.caption = element_text(hjust = c(0, 1)),
           legend.position = "none",
           plot.margin = unit(c(5, 5, 5, 20), "mm"))
   
-  grid.arrange(valueBoxplot, valueDensity)
+  suppressWarnings( grid.arrange(valueBoxplot, valueDensity) )
+  
+  # mulitple quantile calls not efficient, but fast enough here
+  stats <-
+    rawData           %>%
+    group_by(Sepsis)  %>%
+    summarize(N        = n(),
+              Distinct = n_distinct(.[1]),
+              Mean     = mean(!!rlang::sym(names(rawData)[1])),
+              StdDev   = sd(!!rlang::sym(names(rawData)[1])),
+              Skewness = skewness(!!rlang::sym(names(rawData)[1])),
+              Kurtosis = kurtosis(!!rlang::sym(names(rawData)[1])),
+              Min      = min(!!rlang::sym(names(rawData)[1])),
+              Q5       = quantile(!!rlang::sym(names(rawData)[1]), 0.05),
+              Q25      = quantile(!!rlang::sym(names(rawData)[1]), 0.25),
+              Median   = median(!!rlang::sym(names(rawData)[1])),
+              Q75      = quantile(!!rlang::sym(names(rawData)[1]), 0.75),
+              Q95      = quantile(!!rlang::sym(names(rawData)[1]), 0.95),
+              Max      = max(!!rlang::sym(names(rawData)[1])))   %>%
+    ungroup()         %>%
+    arrange(desc(Sepsis))
+  
+  print( stats %>%  Show(bigMark = ",") )
   
   cat("\n")
 }
 ```
+
+
+Notes:
+
+* StackOverflow [R dplyr operate on a column known only by its string name](https://stackoverflow.com/questions/46310123/r-dplyr-operate-on-a-column-known-only-by-its-string-name).
+
+* StackOverflow [Using dplyr window functions to calculate percentiles](https://stackoverflow.com/questions/30488389/using-dplyr-window-functions-to-calculate-percentiles).
 
 # Discussion
 
@@ -199,6 +254,17 @@ Need to impose limits since outliers distort some charts too much.
 # Conclusions
 
 [work in progress]
+
+# sessionInfo
+
+```{r}
+library(rmarkdown)
+pandoc_version()
+```
+
+```{r}
+sessionInfo()
+```
 
 ```{r, echo=FALSE}
 time.2 <- Sys.time()
