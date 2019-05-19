@@ -411,7 +411,6 @@ allData                         %>%
   Show()
 ```
 
-
 ## Raw Records Per Patient
 
 There is one record per hour, but the first patient record is sometimes not hour 1.
