@@ -17,7 +17,7 @@ div#TOC li {
 }
 </style>
 
-efg | 2019-04-01
+efg | 2019-04-06
 
 >An expanded training database is now available, containing data from a total of 40,336 subjects. The complete training database (42 MB), consisting of two parts: training set A (20,336 subjects) and B (20,000 subjects).
 
@@ -43,9 +43,11 @@ The focus of this notebook is on the Demographics data (columns 35-40 in the raw
 | `ICULOS`       | Hours | ICU length-of-stay (hours since ICU admit)        |      
 
 
-and the outcome (column 41)
+and the outcome (column 41), `SepsisLabel`.  
 
-* `SepsisLabel`.  For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. For non-sepsis patients, `SepsisLabel` is 0. 
+For sepsis patients, `SepsisLabel` is 1 if $t \ge t_{sepsis} - 6$ and 0 if $t < t_{sepsis} - 6$. 
+
+For non-sepsis patients, `SepsisLabel` is 0. 
 
 # Background
 
@@ -106,6 +108,27 @@ allData <- bind_rows(allDataA, allDataB)
 dim(allData)
 ```
 
+**Summary**
+
+```{r}
+allData                                      %>%
+  group_by(Source)                           %>%
+  summarize(nRecord  = n(),
+            nPatient = n_distinct(patient))  %>%
+  ungroup()                                  %>%
+  Show(bigMark = ",")
+```
+
+```{r}
+allData                                      %>%
+  summarize(nSource  = n_distinct(Source),
+            nRecord  = n(),
+            nPatient = n_distinct(patient))  %>%
+  Show(bigMark = ",")
+```
+
+`patient` field is unique across both Souces.
+
 Sample records
 
 ```{r}
@@ -124,11 +147,11 @@ Not shown here, but I verified Age, Gender, Unit1 and Unit2 were constant for ea
 Shown here is proof that HospAdmTime does not change by patient.
 
 ```{r}
-allData              %>%
-  group_by(patient)  %>%
+allData                      %>%
+  group_by(Source, patient)  %>%
   summarize(minHospAdmTime = min(HospAdmTime),
             maxHospAdmTime = max(HospAdmTime))  %>%
-  ungroup()          %>%
+  ungroup()                   %>%
   filter(minHospAdmTime != maxHospAdmTime)      %>%
   Show()
 ```
@@ -139,7 +162,7 @@ So, let's grab the first value for most quantities, but verify range of ICULOS.
 patientSummary <- 
   allData                               %>%
   
-  group_by(patient)                     %>%
+  group_by(Source, patient)             %>%
   summarize(nRecord     = n(),
             Age         = Age[1],
             Gender      = Gender[1],
@@ -179,12 +202,14 @@ write_xlsx(patientSummary, "Patient-Sepsis-Summary.xlsx")
 ```
 
 ```{r}
-patientSummary  %>%
-  group_by(SepsisHours) %>%
-  count()       %>%
-  Show()
+patientSummary                  %>%
+  group_by(SepsisHours, Source) %>%
+  count()                       %>%
+  ungroup()                     %>%
+  spread(Source, n, fill = 0)   %>%
+  mutate(Total = A + B)         %>%
+  Show(bigMark = ",")
 ```
-
 
 ## Sepsis Label
 
@@ -192,16 +217,29 @@ patientSummary  %>%
 
 Only about `r round(100*sum(allData$SepsisLabel == 1) / nrow(allData),1)`% of raw records indicate sepsis.
 
-```{r, comment=NA}
-table(allData$SepsisLabel, useNA = "ifany")
+```{r}
+allData                         %>%
+  group_by(SepsisLabel, Source) %>%
+  count()                       %>%
+  ungroup()                     %>%
+  spread(Source, n, fill = 0)   %>%
+  mutate(Total = A + B)         %>%
+  Show(bigMark = ",")
 ```
+
 
 ### By Patient
 
 Only about `r round(100*sum(patientSummary$Sepsis == "Sepsis") / nrow(patientSummary),1)`% of the patients have sepsis.    
 
-```{r, comment=NA}
-table(patientSummary$Sepsis, useNA = "ifany")
+```{r}
+patientSummary                  %>%
+  group_by(Sepsis, Source)       %>%
+  count()                       %>%
+  ungroup()                     %>%
+  spread(Source, n, fill = 0)   %>%
+  mutate(Total = A + B)         %>%
+  Show(bigMark = ",")
 ```
 
 ### First Hour Sepsis Indicated
@@ -227,19 +265,62 @@ firstSepsisHourCounts <-
 nrow(firstSepsisHourCounts)
 ```
 
-Sepsis reported in first hour for `r round(100 * firstSepsisHourCounts$n[1] / sum(firstSepsisHourCounts$n), 1)`% of sepsis patients.
+```{r, comment=NA}
+firstSepsisHourCounts <-
+  patientSummary                     %>%
+  filter(Sepsis == "Sepsis")         %>%
+  group_by(FirstSepsisHour, Source)  %>%
+  count()                            %>%
+  ungroup()                          %>%
+  spread(Source, n, fill = 0)        %>%
+  mutate(Total = A + B)           
+  
+nrow(firstSepsisHourCounts)
+```
 
-```{r}
+Sepsis reported in first hour for `r round(100 * firstSepsisHourCounts$Total[1] / sum(firstSepsisHourCounts$Total), 1)`% of sepsis patients.
+
+```{r, fig.widtdh=8, fig.height=6}
 firstSepsisHourCounts     %>%
-  ggplot(aes(x = FirstSepsisHour, y = n))                        +
+  ggplot(aes(x = FirstSepsisHour, y = Total))                    +
     geom_bar(stat = "identity", fill="blue")                     +                                    
-  # scale_x_log10(breaks = LOSbreaks)                            +
     labs(title = "First Hour Sepsis Indicated",
-         subtitle = paste(sum(firstSepsisHourCounts$n), "sepsis patients"), 
+         subtitle = paste(sum(firstSepsisHourCounts$Total), "sepsis patients"), 
          x = "First Sepsis Hour", 
          y = "Patient Counts",
          caption = c(plotCaptionLeft, plotCaptionRight))         +
     theme(plot.caption = element_text(hjust=c(0.0,1.0)))
+```
+
+```{r, comment=NA}
+firstSepsisHourCounts <-
+  patientSummary                     %>%
+  filter(Sepsis == "Sepsis")         %>%
+  group_by(FirstSepsisHour, Source)  %>%
+  count()                            %>%
+  ungroup()                       
+```
+
+```{r}
+sourceCounts   <- table(firstSepsisHourCounts$Source, useNA="ifany")
+sourceFacetName <- paste0("Source ", names(sourceCounts), " [", sourceCounts, "]")
+
+sourceLabeller <- function(variable, value)
+{
+  return(sourceFacetName[value])
+}
+```             
+
+```{r, fig.widtdh=8, fig.height=6}
+firstSepsisHourCounts     %>%
+  ggplot(aes(x = FirstSepsisHour, y = n))                        +
+    geom_bar(stat = "identity", fill="blue")                     +                                    
+    labs(title = "First Hour Sepsis Indicated",
+         x = "First Sepsis Hour", 
+         y = "Patient Counts",
+         caption = c(plotCaptionLeft, plotCaptionRight))         +
+    theme(plot.caption = element_text(hjust=c(0.0,1.0)))         +
+   facet_wrap(~Source, nrow=2, labeller = as_labeller(sourceLabeller))    
 ```
 
 ```{r}
